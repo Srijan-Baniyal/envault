@@ -1,6 +1,14 @@
 import "server-only";
 
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import {
+  accessSync,
+  constants,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
 import type { SecretEnvelope } from "@/lib/crypto/types";
@@ -14,8 +22,24 @@ const DEFAULT_STORE_FILE_PATH = join(
   ".shareenv",
   "zk-store.json"
 );
-const STORE_FILE_PATH =
-  process.env.SHAREENV_STORE_FILE_PATH ?? DEFAULT_STORE_FILE_PATH;
+
+const FALLBACK_STORE_FILE_PATH = join(tmpdir(), "shareenv", "zk-store.json");
+
+const resolveStoreFilePath = (): string => {
+  if (process.env.SHAREENV_STORE_FILE_PATH) {
+    return process.env.SHAREENV_STORE_FILE_PATH;
+  }
+
+  try {
+    accessSync(process.cwd(), constants.W_OK);
+    return DEFAULT_STORE_FILE_PATH;
+  } catch {
+    // Serverless bundles (e.g. /var/task) are read-only; /tmp is writable.
+    return FALLBACK_STORE_FILE_PATH;
+  }
+};
+
+const STORE_FILE_PATH = resolveStoreFilePath();
 
 export interface StoredEnvelopeRecord {
   accessCount: number;

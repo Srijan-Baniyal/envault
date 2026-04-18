@@ -1,1 +1,32 @@
-[{"id":"949c0f86-9c94-43d3-84e0-087997eed9d3","envelope":{"version":"shareenv.v1","createdAt":"2026-04-18T09:47:35.765Z","kdf":{"name":"Argon2id","version":"0x13","iterations":3,"memoryKiB":65536,"parallelism":1,"outputLength":64,"salt":"l44wQdmZ8T8Ja4r9sbvxfw"},"cipher":{"name":"AES-GCM","iv":"JrdN7NvzC60X5uyj","ciphertext":"nBqCnYhsXbhR-uBWYILY7a9T_mzEueSiYA7a1mAPSXldOQ_ksvboqPbO1GMBKQoLjEBNqZA9gJI6ywLrpxp1NHf1LIf0hrP9JduRajmJsZrV9Umqs3XklhA1tsf_3LF1esJYwv9yWAvCwh4nWO_UT52FQu42Y1zB6LlJ3FEi0kzicRLB0DOaG5lhQGSvVmyoZGINuPa60Mc2gm1Bf91Tp6gSCUnvvaNappzWXIs"},"mac":{"name":"HMAC-SHA-256","tag":"MBqTepDp22qKogrI5D432otn-2sjbxxJ1l3BgMGYXZA"},"aad":"eyJ2ZXJzaW9uIjoic2hhcmVlbnYudjEiLCJjcmVhdGVkQXQiOiIyMDI2LTA0LTE4VDA5OjQ3OjM1Ljc2NVoiLCJrZGYiOnsibmFtZSI6IkFyZ29uMmlkIiwidmVyc2lvbiI6IjB4MTMiLCJpdGVyYXRpb25zIjozLCJtZW1vcnlLaUIiOjY1NTM2LCJwYXJhbGxlbGlzbSI6MSwib3V0cHV0TGVuZ3RoIjo2NCwic2FsdCI6Imw0NHdRZG1aOFQ4SmE0cjlzYnZ4ZncifSwiY2lwaGVyIjp7Im5hbWUiOiJBRVMtR0NNIiwiaXYiOiJKcmRON052ekM2MFg1dXlqIn19"},"createdAt":"2026-04-18T09:47:37.369Z","expiresAt":"2026-04-18T10:02:37.369Z","oneTime":true,"accessCount":0}]
+[
+  {
+    "id": "949c0f86-9c94-43d3-84e0-087997eed9d3",
+    "envelope": {
+      "version": "shareenv.v1",
+      "createdAt": "2026-04-18T09:47:35.765Z",
+      "kdf": {
+        "name": "Argon2id",
+        "version": "0x13",
+        "iterations": 3,
+        "memoryKiB": 65536,
+        "parallelism": 1,
+        "outputLength": 64,
+        "salt": "l44wQdmZ8T8Ja4r9sbvxfw"
+      },
+      "cipher": {
+        "name": "AES-GCM",
+        "iv": "JrdN7NvzC60X5uyj",
+        "ciphertext": "nBqCnYhsXbhR-uBWYILY7a9T_mzEueSiYA7a1mAPSXldOQ_ksvboqPbO1GMBKQoLjEBNqZA9gJI6ywLrpxp1NHf1LIf0hrP9JduRajmJsZrV9Umqs3XklhA1tsf_3LF1esJYwv9yWAvCwh4nWO_UT52FQu42Y1zB6LlJ3FEi0kzicRLB0DOaG5lhQGSvVmyoZGINuPa60Mc2gm1Bf91Tp6gSCUnvvaNappzWXIs"
+      },
+      "mac": {
+        "name": "HMAC-SHA-256",
+        "tag": "MBqTepDp22qKogrI5D432otn-2sjbxxJ1l3BgMGYXZA"
+      },
+      "aad": "eyJ2ZXJzaW9uIjoic2hhcmVlbnYudjEiLCJjcmVhdGVkQXQiOiIyMDI2LTA0LTE4VDA5OjQ3OjM1Ljc2NVoiLCJrZGYiOnsibmFtZSI6IkFyZ29uMmlkIiwidmVyc2lvbiI6IjB4MTMiLCJpdGVyYXRpb25zIjozLCJtZW1vcnlLaUIiOjY1NTM2LCJwYXJhbGxlbGlzbSI6MSwib3V0cHV0TGVuZ3RoIjo2NCwic2FsdCI6Imw0NHdRZG1aOFQ4SmE0cjlzYnZ4ZncifSwiY2lwaGVyIjp7Im5hbWUiOiJBRVMtR0NNIiwiaXYiOiJKcmRON052ekM2MFg1dXlqIn19"
+    },
+    "createdAt": "2026-04-18T09:47:37.369Z",
+    "expiresAt": "2026-04-18T10:02:37.369Z",
+    "oneTime": true,
+    "accessCount": 0
+  }
+]

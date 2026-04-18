@@ -128,3 +128,44 @@ Biome's linter will catch most issues automatically. Focus your attention on:
 ---
 
 Most formatting and common issues are automatically fixed by Biome. Run `bun x ultracite fix` before committing to ensure compliance.
+
+---
+
+## ShareEnv Project Rules
+
+This repository is a security-first cryptography project. Treat it as protocol
+engineering work, not rapid prototype code.
+
+### Mission
+
+Build a zero-knowledge system for sharing environment variables where the server
+stores only encrypted envelopes and never receives passphrases.
+
+### Security Invariants
+
+- Plaintext env values must never be sent to server.
+- Passphrases must never be sent to server.
+- Envelope MAC must be verified before decrypt.
+- Any crypto semantic change requires spec and threat-model updates.
+
+### Required References
+
+Before changing crypto or API envelope behavior, review and keep aligned:
+
+- `docs/protocol/spec.md`
+- `docs/security/threat-model.md`
+- `docs/engineering/architecture.md`
+
+### Skill Index For This Repo
+
+- `.agents/skills/shareenv-crypto-engineering/SKILL.md`
+- `.agents/skills/vercel-react-best-practices/SKILL.md`
+- `.agents/skills/frontend-design/SKILL.md`
+
+### Release Gate Reminder
+
+Before merge, run:
+
+- `bun x ultracite check`
+- verify server actions preserve zero-knowledge guarantees
+- verify envelope tamper detection paths still fail closed

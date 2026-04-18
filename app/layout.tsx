@@ -1,21 +1,30 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { DM_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const dmSans = DM_Sans({
+  variable: "--font-sans",
   subsets: ["latin"],
+  display: "swap",
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const jetBrainsMono = JetBrains_Mono({
+  variable: "--font-mono",
   subsets: ["latin"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "ShareEnv | Zero-Knowledge Environment Sharing",
+  title: "ShareEnv — Zero-Knowledge Environment Sharing",
   description:
-    "Protocol-first cryptography platform for securely sharing environment variables with client-side encryption and MAC verification.",
+    "Share environment variables securely with client-side AES-256-GCM encryption, Argon2id key derivation, and HMAC-SHA-256 integrity. Your secrets never leave your browser.",
+  keywords: [
+    "environment variables",
+    "zero-knowledge",
+    "encryption",
+    "AES-256-GCM",
+    "secret sharing",
+  ],
 };
 
 export default function RootLayout({
@@ -25,7 +34,7 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${dmSans.variable} ${jetBrainsMono.variable} dark h-full antialiased`}
       lang="en"
     >
       <body className="flex min-h-full flex-col">{children}</body>

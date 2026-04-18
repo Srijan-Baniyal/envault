@@ -6,7 +6,7 @@ export const getSubtleCrypto = (): SubtleCrypto => {
   return subtle;
 };
 
-export const getRandomBytes = (length: number): Uint8Array => {
+export const getRandomBytes = (length: number): Uint8Array<ArrayBuffer> => {
   if (!Number.isInteger(length) || length <= 0) {
     throw new Error("Random byte length must be a positive integer.");
   }

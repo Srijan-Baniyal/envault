@@ -2,8 +2,8 @@
 
 import { updateTag } from "next/cache";
 import { redirect } from "next/navigation";
-
-import { assertSecretEnvelope } from "@/lib/crypto/validators";
+import type { SecretEnvelope } from "@/lib/crypto/types";
+import { isSecretEnvelope } from "@/lib/crypto/validators";
 import { ENVELOPE_STORE_CACHE_TAG } from "@/lib/server/envelope-service";
 import {
   consumeEnvelopeById,
@@ -30,7 +30,59 @@ const toOptionalInteger = (value: string): number | undefined => {
 const safeMessage = (value: string): string =>
   encodeURIComponent(value.slice(0, 120));
 
-export const storeEnvelopeAction = (formData: FormData): void => {
+/* ──────────────────────────────────────────────────────────────
+ * Client-side envelope store action
+ * Called from the encrypt form with a pre-encrypted envelope.
+ * Returns the envelope ID instead of redirecting.
+ * ────────────────────────────────────────────────────────────── */
+
+interface StoreFromClientResult {
+  error: string | null;
+  id: string | null;
+  success: boolean;
+}
+
+export async function storeEnvelopeFromClientAction(
+  envelopeJson: string,
+  ttlSeconds: number | undefined,
+  oneTime: boolean
+): Promise<StoreFromClientResult> {
+  if (typeof envelopeJson !== "string" || envelopeJson.trim().length === 0) {
+    return { success: false, error: "Envelope JSON is required.", id: null };
+  }
+
+  try {
+    const parsedEnvelope: unknown = JSON.parse(envelopeJson);
+
+    if (!isSecretEnvelope(parsedEnvelope)) {
+      return {
+        success: false,
+        error: "Invalid secret envelope payload.",
+        id: null,
+      };
+    }
+
+    const record = await createStoredEnvelope({
+      envelope: parsedEnvelope,
+      oneTime,
+      ttlSeconds,
+    });
+
+    updateTag(ENVELOPE_STORE_CACHE_TAG);
+
+    return { success: true, error: null, id: record.id };
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Invalid envelope payload.";
+    return { success: false, error: message, id: null };
+  }
+}
+
+/* ──────────────────────────────────────────────────────────────
+ * Legacy form-based actions (kept for backward compatibility)
+ * ────────────────────────────────────────────────────────────── */
+
+export async function storeEnvelopeAction(formData: FormData): Promise<void> {
   const envelopeRaw = toStringValue(formData.get("envelopeJson"));
   const ttlRaw = toStringValue(formData.get("ttlSeconds"));
   const oneTime = formData.get("oneTime") === "on";
@@ -42,11 +94,16 @@ export const storeEnvelopeAction = (formData: FormData): void => {
   }
 
   try {
-    const parsedEnvelope = JSON.parse(envelopeRaw) as unknown;
-    assertSecretEnvelope(parsedEnvelope);
+    const parsedEnvelope: unknown = JSON.parse(envelopeRaw);
 
-    const record = createStoredEnvelope({
-      envelope: parsedEnvelope,
+    if (!isSecretEnvelope(parsedEnvelope)) {
+      redirect(
+        `/?status=error&message=${safeMessage("Invalid secret envelope payload.")}`
+      );
+    }
+
+    const record = await createStoredEnvelope({
+      envelope: parsedEnvelope as SecretEnvelope,
       oneTime,
       ttlSeconds: toOptionalInteger(ttlRaw),
     });
@@ -60,9 +117,9 @@ export const storeEnvelopeAction = (formData: FormData): void => {
       error instanceof Error ? error.message : "Invalid envelope payload.";
     redirect(`/?status=error&message=${safeMessage(message)}`);
   }
-};
+}
 
-export const deleteEnvelopeAction = (formData: FormData): void => {
+export async function deleteEnvelopeAction(formData: FormData): Promise<void> {
   const id = toStringValue(formData.get("id"));
 
   if (id.length === 0) {
@@ -71,7 +128,7 @@ export const deleteEnvelopeAction = (formData: FormData): void => {
     );
   }
 
-  const deleted = deleteEnvelopeById(id);
+  const deleted = await deleteEnvelopeById(id);
   updateTag(ENVELOPE_STORE_CACHE_TAG);
 
   if (!deleted) {
@@ -81,9 +138,9 @@ export const deleteEnvelopeAction = (formData: FormData): void => {
   }
 
   redirect(`/?status=ok&message=${safeMessage(`Envelope ${id} deleted.`)}`);
-};
+}
 
-export const consumeEnvelopeAction = (formData: FormData): void => {
+export async function consumeEnvelopeAction(formData: FormData): Promise<void> {
   const id = toStringValue(formData.get("id"));
 
   if (id.length === 0) {
@@ -92,7 +149,7 @@ export const consumeEnvelopeAction = (formData: FormData): void => {
     );
   }
 
-  const consumed = consumeEnvelopeById(id);
+  const consumed = await consumeEnvelopeById(id);
   updateTag(ENVELOPE_STORE_CACHE_TAG);
 
   if (!consumed) {
@@ -102,4 +159,4 @@ export const consumeEnvelopeAction = (formData: FormData): void => {
   }
 
   redirect(`/?status=ok&message=${safeMessage(`Envelope ${id} consumed.`)}`);
-};
+}

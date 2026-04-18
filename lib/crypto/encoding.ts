@@ -5,7 +5,7 @@ const BASE64URL_PATTERN = /^[A-Za-z0-9_-]*$/;
 
 const hasBuffer = (): boolean => typeof Buffer !== "undefined";
 
-const toBase64 = (bytes: Uint8Array): string => {
+const toBase64 = (bytes: Uint8Array<ArrayBuffer>): string => {
   if (hasBuffer()) {
     return Buffer.from(bytes).toString("base64");
   }
@@ -17,9 +17,10 @@ const toBase64 = (bytes: Uint8Array): string => {
   return btoa(binary);
 };
 
-const fromBase64 = (value: string): Uint8Array => {
+const fromBase64 = (value: string): Uint8Array<ArrayBuffer> => {
   if (hasBuffer()) {
-    return new Uint8Array(Buffer.from(value, "base64"));
+    const buf = Buffer.from(value, "base64");
+    return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
   }
 
   const binary = atob(value);
@@ -30,16 +31,16 @@ const fromBase64 = (value: string): Uint8Array => {
   return bytes;
 };
 
-export const utf8ToBytes = (value: string): Uint8Array =>
+export const utf8ToBytes = (value: string): Uint8Array<ArrayBuffer> =>
   textEncoder.encode(value);
 
-export const bytesToUtf8 = (value: Uint8Array): string =>
+export const bytesToUtf8 = (value: Uint8Array<ArrayBufferLike>): string =>
   textDecoder.decode(value);
 
-export const bytesToBase64Url = (value: Uint8Array): string =>
+export const bytesToBase64Url = (value: Uint8Array<ArrayBuffer>): string =>
   toBase64(value).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 
-export const base64UrlToBytes = (value: string): Uint8Array => {
+export const base64UrlToBytes = (value: string): Uint8Array<ArrayBuffer> => {
   if (!BASE64URL_PATTERN.test(value)) {
     throw new Error("Invalid base64url input.");
   }
@@ -50,7 +51,9 @@ export const base64UrlToBytes = (value: string): Uint8Array => {
   return fromBase64(padded);
 };
 
-export const joinBytes = (...segments: Uint8Array[]): Uint8Array => {
+export const joinBytes = (
+  ...segments: Uint8Array<ArrayBuffer>[]
+): Uint8Array<ArrayBuffer> => {
   let totalLength = 0;
   for (const segment of segments) {
     totalLength += segment.length;

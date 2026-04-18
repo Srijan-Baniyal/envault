@@ -6,7 +6,7 @@ import {
 } from "@/lib/crypto/encoding";
 import { getRandomBytes, getSubtleCrypto } from "@/lib/crypto/runtime";
 import type { SecretEnvelope } from "@/lib/crypto/types";
-import { assertSecretEnvelope } from "@/lib/crypto/validators";
+import { isSecretEnvelope } from "@/lib/crypto/validators";
 
 const WRAPPED_ENVELOPE_VERSION = "shareenv.wrapped.v1" as const;
 const WRAPPED_ENVELOPE_ALGORITHM = "RSA-OAEP-SHA-256+AES-256-GCM" as const;
@@ -36,9 +36,9 @@ const isBase64UrlString = (value: unknown): value is string =>
   value.length > 0 &&
   BASE64URL_PATTERN.test(value);
 
-export const assertWrappedSecretEnvelope = (
+function assertWrappedSecretEnvelope(
   value: unknown
-): asserts value is WrappedSecretEnvelopeV1 => {
+): asserts value is WrappedSecretEnvelopeV1 {
   if (!isRecord(value)) {
     throw new Error("Wrapped envelope payload must be an object.");
   }
@@ -62,7 +62,7 @@ export const assertWrappedSecretEnvelope = (
   if (!isBase64UrlString(value.ciphertext)) {
     throw new Error("Wrapped envelope ciphertext is invalid.");
   }
-};
+}
 
 export const generateEnvelopeRecipientKeyPair =
   async (): Promise<EnvelopeRecipientKeyPair> => {
@@ -90,7 +90,9 @@ export const wrapEnvelopeWithRecipientPublicKey = async (
   envelope: SecretEnvelope,
   recipientPublicKeyJwk: JsonWebKey
 ): Promise<WrappedSecretEnvelopeV1> => {
-  assertSecretEnvelope(envelope);
+  if (!isSecretEnvelope(envelope)) {
+    throw new Error("Invalid secret envelope payload.");
+  }
 
   const subtle = getSubtleCrypto();
   const recipientPublicKey = await subtle.importKey(
@@ -191,7 +193,9 @@ export const unwrapEnvelopeWithRecipientPrivateKey = async (
   const envelopeCandidate = JSON.parse(
     bytesToUtf8(new Uint8Array(plaintextBuffer))
   ) as unknown;
-  assertSecretEnvelope(envelopeCandidate);
+  if (!isSecretEnvelope(envelopeCandidate)) {
+    throw new Error("Invalid secret envelope payload.");
+  }
 
   return envelopeCandidate;
 };

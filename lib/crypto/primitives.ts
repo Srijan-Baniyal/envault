@@ -17,7 +17,7 @@ import {
   type SecretEnvelope,
   type SecretEnvelopeV1,
 } from "@/lib/crypto/types";
-import { assertSecretEnvelope } from "@/lib/crypto/validators";
+import { isSecretEnvelope } from "@/lib/crypto/validators";
 
 const DEFAULT_PBKDF2_ITERATIONS = 210_000;
 const MIN_PBKDF2_ITERATIONS = 100_000;
@@ -257,7 +257,7 @@ const normalizeEnvironmentVariables = (
 
 const buildAssociatedDataBytes = (
   envelope: Pick<SecretEnvelopeV1, "version" | "createdAt" | "kdf" | "cipher">
-): Uint8Array => {
+): Uint8Array<ArrayBuffer> => {
   const kdfPayload =
     envelope.kdf.name === "PBKDF2"
       ? {
@@ -291,13 +291,13 @@ const buildAssociatedDataBytes = (
 
 const deriveKeyPair = async (
   passphrase: string,
-  salt: Uint8Array,
+  salt: Uint8Array<ArrayBuffer>,
   kdf: SecretEnvelopeV1["kdf"]
 ): Promise<DerivedKeyPair> => {
   const subtle = getSubtleCrypto();
   const passphraseBytes = utf8ToBytes(passphrase);
 
-  let derivedBytes: Uint8Array;
+  let derivedBytes: Uint8Array<ArrayBuffer>;
 
   if (kdf.name === "PBKDF2") {
     const pbkdf2Key = await subtle.importKey(
@@ -321,13 +321,14 @@ const deriveKeyPair = async (
 
     derivedBytes = new Uint8Array(derivedBits);
   } else {
-    derivedBytes = await argon2idAsync(passphraseBytes, salt, {
+    const argonResult = await argon2idAsync(passphraseBytes, salt, {
       version: 0x13,
       t: kdf.iterations,
       m: kdf.memoryKiB,
       p: kdf.parallelism,
       dkLen: kdf.outputLength,
     });
+    derivedBytes = new Uint8Array(argonResult);
   }
 
   const encryptionMaterial = derivedBytes.slice(0, 32);
@@ -486,7 +487,9 @@ export const openEnvironmentEnvelope = async (
   envelopeInput: SecretEnvelope,
   passphrase: string
 ): Promise<Record<string, string>> => {
-  assertSecretEnvelope(envelopeInput);
+  if (!isSecretEnvelope(envelopeInput)) {
+    throw new Error("Invalid secret envelope payload.");
+  }
 
   const normalizedPassphrase = normalizePassphrase(passphrase);
 

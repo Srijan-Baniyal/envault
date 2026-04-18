@@ -23,7 +23,7 @@ export interface EnvelopeStoreOverview {
   };
 }
 
-export const getEnvelopeStoreOverview = (): EnvelopeStoreOverview => {
+export async function getEnvelopeStoreOverview(): Promise<EnvelopeStoreOverview> {
   "use cache";
 
   cacheTag(ENVELOPE_STORE_CACHE_TAG);
@@ -31,18 +31,18 @@ export const getEnvelopeStoreOverview = (): EnvelopeStoreOverview => {
 
   return {
     generatedAt: new Date().toISOString(),
-    limits: getStoreDefaults(),
-    stats: getStoreStats(),
+    limits: await getStoreDefaults(),
+    stats: await getStoreStats(),
   };
-};
+}
 
-export const listRecentEnvelopeSummaries = (
+export async function listRecentEnvelopeSummaries(
   limit = 20
-): StoredEnvelopeSummary[] => {
+): Promise<StoredEnvelopeSummary[]> {
   "use cache";
 
   cacheTag(ENVELOPE_STORE_CACHE_TAG);
   cacheLife("minutes");
 
-  return listEnvelopeSummaries({ limit });
-};
+  return await listEnvelopeSummaries({ limit });
+}

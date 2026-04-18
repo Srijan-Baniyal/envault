@@ -118,6 +118,7 @@ Residual risk:
 - Keep API logs free from request body capture.
 - Rate-limit envelope creation/fetch endpoints.
 - Use short default TTL for sensitive exchanges.
+- In serverless/multi-instance production, use shared durable storage (Redis/Postgres); do not rely on instance-local filesystem state.
 - Run dependency and secret scanning in CI.
 
 ## 8. Planned Hardening (v2)

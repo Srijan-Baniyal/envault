@@ -10,12 +10,26 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { Redis } from "@upstash/redis";
 
 import type { SecretEnvelope } from "@/lib/crypto/types";
 import { isSecretEnvelope } from "@/lib/crypto/validators";
 
 const DEFAULT_TTL_SECONDS = 15 * 60;
 const MAX_TTL_SECONDS = 24 * 60 * 60;
+
+const REDIS_REST_URL =
+  process.env.SHAREENV_REDIS_REST_URL ??
+  process.env.KV_REST_API_URL ??
+  process.env.UPSTASH_REDIS_REST_URL;
+
+const REDIS_REST_TOKEN =
+  process.env.SHAREENV_REDIS_REST_TOKEN ??
+  process.env.KV_REST_API_TOKEN ??
+  process.env.UPSTASH_REDIS_REST_TOKEN;
+
+const REDIS_KEY_PREFIX = process.env.SHAREENV_REDIS_KEY_PREFIX ?? "shareenv";
+const REDIS_INDEX_KEY = `${REDIS_KEY_PREFIX}:envelopes:index`;
 
 const DEFAULT_STORE_FILE_PATH = join(
   process.cwd(),
@@ -25,7 +39,60 @@ const DEFAULT_STORE_FILE_PATH = join(
 
 const FALLBACK_STORE_FILE_PATH = join(tmpdir(), "shareenv", "zk-store.json");
 
+const createRedisClient = (): Redis | null => {
+  const hasRedisUrl =
+    typeof REDIS_REST_URL === "string" && REDIS_REST_URL.length > 0;
+  const hasRedisToken =
+    typeof REDIS_REST_TOKEN === "string" && REDIS_REST_TOKEN.length > 0;
+
+  if (hasRedisUrl !== hasRedisToken) {
+    throw new Error(
+      "Both SHAREENV_REDIS_REST_URL and SHAREENV_REDIS_REST_TOKEN must be set when enabling Redis storage."
+    );
+  }
+
+  if (!(hasRedisUrl && hasRedisToken)) {
+    return null;
+  }
+
+  return new Redis({
+    url: REDIS_REST_URL,
+    token: REDIS_REST_TOKEN,
+  });
+};
+
+const REDIS_CLIENT = createRedisClient();
+const redisEnvelopeKey = (id: string): string =>
+  `${REDIS_KEY_PREFIX}:envelope:${id}`;
+
+const assertStoreConfiguration = (): void => {
+  const isProduction = process.env.NODE_ENV === "production";
+  const isServerlessRuntime =
+    process.env.VERCEL === "1" ||
+    typeof process.env.AWS_LAMBDA_FUNCTION_NAME === "string";
+  const hasFileStoreOverride =
+    typeof process.env.SHAREENV_STORE_FILE_PATH === "string" &&
+    process.env.SHAREENV_STORE_FILE_PATH.length > 0;
+
+  if (
+    isProduction &&
+    isServerlessRuntime &&
+    !REDIS_CLIENT &&
+    !hasFileStoreOverride
+  ) {
+    throw new Error(
+      "Shared Redis storage is required in serverless production. Set SHAREENV_REDIS_REST_URL and SHAREENV_REDIS_REST_TOKEN (or KV/UPSTASH equivalents)."
+    );
+  }
+};
+
+assertStoreConfiguration();
+
 const resolveStoreFilePath = (): string => {
+  if (REDIS_CLIENT) {
+    return DEFAULT_STORE_FILE_PATH;
+  }
+
   if (process.env.SHAREENV_STORE_FILE_PATH) {
     return process.env.SHAREENV_STORE_FILE_PATH;
   }
@@ -163,6 +230,40 @@ const pruneExpired = (records: Map<string, StoredEnvelopeRecord>): void => {
   }
 };
 
+const ttlSecondsFromExpiresAt = (expiresAt: string | null): number | null => {
+  if (!expiresAt) {
+    return null;
+  }
+
+  const millisecondsUntilExpiry = Date.parse(expiresAt) - now().getTime();
+  if (millisecondsUntilExpiry <= 0) {
+    return 0;
+  }
+
+  return Math.ceil(millisecondsUntilExpiry / 1000);
+};
+
+const parseStoredEnvelopeRecord = (
+  value: unknown,
+  id: string
+): StoredEnvelopeRecord => {
+  let candidate = value;
+
+  if (typeof candidate === "string") {
+    try {
+      candidate = JSON.parse(candidate) as unknown;
+    } catch {
+      throw new Error(`Envelope store contains invalid JSON for id ${id}.`);
+    }
+  }
+
+  if (!isStoredEnvelopeRecord(candidate)) {
+    throw new Error(`Envelope store contains an invalid record for id ${id}.`);
+  }
+
+  return cloneRecord(candidate);
+};
+
 const readStore = (): Map<string, StoredEnvelopeRecord> => {
   try {
     const rawStoreData = readFileSync(STORE_FILE_PATH, "utf8");
@@ -222,10 +323,131 @@ const withStore = <T>(
   return result;
 };
 
-export const createStoredEnvelope = (
+const deleteRedisRecordById = async (id: string): Promise<void> => {
+  if (!REDIS_CLIENT) {
+    return;
+  }
+
+  await Promise.all([
+    REDIS_CLIENT.del(redisEnvelopeKey(id)),
+    REDIS_CLIENT.zrem(REDIS_INDEX_KEY, id),
+  ]);
+};
+
+const loadRedisRecordById = async (
+  id: string
+): Promise<StoredEnvelopeRecord | null> => {
+  if (!REDIS_CLIENT) {
+    return null;
+  }
+
+  const payload = await REDIS_CLIENT.get<unknown>(redisEnvelopeKey(id));
+  if (payload === null) {
+    await REDIS_CLIENT.zrem(REDIS_INDEX_KEY, id);
+    return null;
+  }
+
+  const record = parseStoredEnvelopeRecord(payload, id);
+  if (isExpired(record)) {
+    await deleteRedisRecordById(id);
+    return null;
+  }
+
+  return record;
+};
+
+const persistRedisRecord = async (
+  record: StoredEnvelopeRecord
+): Promise<void> => {
+  if (!REDIS_CLIENT) {
+    return;
+  }
+
+  const serializedRecord = JSON.stringify(cloneRecord(record));
+  const ttlSeconds = ttlSecondsFromExpiresAt(record.expiresAt);
+
+  if (ttlSeconds === null) {
+    await REDIS_CLIENT.set(redisEnvelopeKey(record.id), serializedRecord);
+  } else {
+    if (ttlSeconds <= 0) {
+      await deleteRedisRecordById(record.id);
+      return;
+    }
+
+    await REDIS_CLIENT.set(redisEnvelopeKey(record.id), serializedRecord, {
+      ex: ttlSeconds,
+    });
+  }
+
+  await REDIS_CLIENT.zadd(REDIS_INDEX_KEY, {
+    score: Date.parse(record.createdAt),
+    member: record.id,
+  });
+};
+
+const listRedisRecords = async (
+  limit: number
+): Promise<StoredEnvelopeRecord[]> => {
+  if (!REDIS_CLIENT) {
+    return [];
+  }
+
+  const ids = await REDIS_CLIENT.zrange<string[]>(REDIS_INDEX_KEY, 0, -1, {
+    rev: true,
+  });
+
+  const records: StoredEnvelopeRecord[] = [];
+
+  for (const id of ids) {
+    if (records.length >= limit) {
+      break;
+    }
+
+    const record = await loadRedisRecordById(id);
+    if (record) {
+      records.push(record);
+    }
+  }
+
+  return records;
+};
+
+const countRedisRecords = async (): Promise<number> => {
+  if (!REDIS_CLIENT) {
+    return 0;
+  }
+
+  const ids = await REDIS_CLIENT.zrange<string[]>(REDIS_INDEX_KEY, 0, -1);
+  let activeRecords = 0;
+
+  for (const id of ids) {
+    const record = await loadRedisRecordById(id);
+    if (record) {
+      activeRecords += 1;
+    }
+  }
+
+  return activeRecords;
+};
+
+export const createStoredEnvelope = async (
   input: CreateStoredEnvelopeInput
-): StoredEnvelopeRecord =>
-  withStore((records) => {
+): Promise<StoredEnvelopeRecord> => {
+  if (REDIS_CLIENT) {
+    const record: StoredEnvelopeRecord = {
+      id: createId(),
+      envelope: cloneEnvelope(input.envelope),
+      createdAt: now().toISOString(),
+      expiresAt: resolveExpiresAt(input.ttlSeconds),
+      oneTime: input.oneTime ?? true,
+      accessCount: 0,
+    };
+
+    await persistRedisRecord(record);
+    return cloneRecord(record);
+  }
+
+  return withStore((records) => {
     const id = createId();
     const createdAt = now().toISOString();
     const expiresAt = resolveExpiresAt(input.ttlSeconds);
@@ -243,9 +465,32 @@ export const createStoredEnvelope = (
 
     return cloneRecord(record);
   });
+};
 
-export const consumeEnvelopeById = (id: string): StoredEnvelopeRecord | null =>
-  withStore((records) => {
+export const consumeEnvelopeById = async (
+  id: string
+): Promise<StoredEnvelopeRecord | null> => {
+  if (REDIS_CLIENT) {
+    const record = await loadRedisRecordById(id);
+    if (!record) {
+      return null;
+    }
+
+    const updatedRecord: StoredEnvelopeRecord = {
+      ...record,
+      accessCount: record.accessCount + 1,
+    };
+
+    if (updatedRecord.oneTime) {
+      await deleteRedisRecordById(id);
+    } else {
+      await persistRedisRecord(updatedRecord);
+    }
+
+    return cloneRecord(updatedRecord);
+  }
+
+  return withStore((records) => {
     const record = records.get(id);
     if (!record) {
       return null;
@@ -264,28 +509,48 @@ export const consumeEnvelopeById = (id: string): StoredEnvelopeRecord | null =>
 
     return cloneRecord(updatedRecord);
   });
+};
 
-export const deleteEnvelopeById = (id: string): boolean =>
-  withStore((records) => records.delete(id));
+export const deleteEnvelopeById = async (id: string): Promise<boolean> => {
+  if (REDIS_CLIENT) {
+    const deletedCount = await REDIS_CLIENT.del(redisEnvelopeKey(id));
+    await REDIS_CLIENT.zrem(REDIS_INDEX_KEY, id);
+    return deletedCount > 0;
+  }
 
-export const getStoreStats = (): { activeRecords: number } =>
-  withStore((records) => ({ activeRecords: records.size }));
+  return withStore((records) => records.delete(id));
+};
 
-export const listEnvelopeSummaries = (options?: {
+export const getStoreStats = async (): Promise<{ activeRecords: number }> => {
+  if (REDIS_CLIENT) {
+    const activeRecords = await countRedisRecords();
+    return { activeRecords };
+  }
+
+  return withStore((records) => ({ activeRecords: records.size }));
+};
+
+export const listEnvelopeSummaries = async (options?: {
   limit?: number;
-}): StoredEnvelopeSummary[] =>
-  withStore((records) => {
-    const limit = options?.limit ?? 20;
+}): Promise<StoredEnvelopeSummary[]> => {
+  const limit = options?.limit ?? 20;
 
-    if (!Number.isInteger(limit) || limit <= 0) {
-      throw new Error("Summary limit must be a positive integer.");
-    }
+  if (!Number.isInteger(limit) || limit <= 0) {
+    throw new Error("Summary limit must be a positive integer.");
+  }
 
-    return Array.from(records.values())
-      .toSorted((left, right) => right.createdAt.localeCompare(left.createdAt))
+  if (REDIS_CLIENT) {
+    const records = await listRedisRecords(limit);
+    return records.map(toSummary);
+  }
+
+  return withStore((records) =>
+    Array.from(records.values())
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
       .slice(0, limit)
-      .map(toSummary);
-  });
+      .map(toSummary)
+  );
+};
 
 export const getStoreDefaults = (): {
   defaultTtlSeconds: number;

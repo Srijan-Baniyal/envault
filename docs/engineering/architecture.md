@@ -59,8 +59,10 @@ ShareEnv is a zero-knowledge environment-sharing platform:
 
 ## 5. Persistence Strategy
 
-- v1 uses in-memory storage for rapid protocol development.
-- Next migration target: Postgres or Redis with envelope JSON blob column and strict retention policy.
+- Local development uses a file-backed store under `.shareenv/`.
+- Serverless/local read-only runtimes fall back to temporary filesystem storage for local execution.
+- Production multi-instance deployments use Redis (Upstash/Vercel KV compatible REST) for shared envelope lookup, TTL, and one-time semantics.
+- Long-term migration target remains Postgres or Redis with envelope JSON blob storage and strict retention policy.
 
 ## 6. Packaging Strategy
 

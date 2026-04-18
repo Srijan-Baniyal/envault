@@ -45,6 +45,24 @@ bun install
 bun run dev
 ```
 
+## Production Storage (Serverless)
+
+Serverless instances do not share local filesystem state. For reliable envelope
+retrieval in production, configure a shared Redis backend.
+
+Set one of these environment-variable pairs:
+
+- `SHAREENV_REDIS_REST_URL` and `SHAREENV_REDIS_REST_TOKEN`
+- `KV_REST_API_URL` and `KV_REST_API_TOKEN` (Vercel KV naming)
+- `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`
+
+Optional:
+
+- `SHAREENV_REDIS_KEY_PREFIX` to namespace keys (default: `shareenv`)
+
+Without shared Redis in multi-instance production, envelope IDs can appear as
+"not found" when create/read requests hit different instances.
+
 ## Quality Gates
 
 ```bash

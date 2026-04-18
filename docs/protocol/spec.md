@@ -116,6 +116,9 @@ Failure at any step must return a generic error and no plaintext.
 - Server MUST NOT inspect plaintext fields.
 - Server MUST NOT attempt decryption.
 - Server MAY enforce TTL and one-time retrieval policy.
+- In multi-instance/serverless deployments, server storage MUST use a shared
+  durable backend (for example Redis or Postgres) so envelope IDs resolve
+  consistently across instances.
 
 ## 10. Versioning Rules
 
